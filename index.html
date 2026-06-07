@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plot Mapping Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-[#020617] text-white overflow-hidden">
+
+    <div class="h-screen flex">
+
+        <!-- LEFT PANEL -->
+        <aside class="w-[260px] bg-[#020617] border-r border-slate-800 flex flex-col shrink-0">
+
+            <div class="h-16 px-4 flex items-center justify-between border-b border-slate-800">
+                <div class="text-lg font-semibold">Plots</div>
+                <div id="plotCountLabel" class="text-xs px-2 py-1 rounded-lg bg-slate-900 text-slate-400">0</div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800">
+                <div class="flex gap-2">
+                    <input 
+                        id="plotCountInput" 
+                        type="number" 
+                        min="1" 
+                        placeholder="Plots"
+                        class="flex-1 h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 outline-none focus:border-blue-500"
+                    >
+                    <button 
+                        id="generatePlotsBtn"
+                        class="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 transition font-medium"
+                    >
+                        Go
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-400">Progress</span>
+                    <span id="progressText" class="font-medium">0 / 0</span>
+                </div>
+                <div class="mt-3 h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="progressBar" class="h-full w-0 bg-green-500 transition-all"></div>
+                </div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800">
+                <input 
+                    id="plotSearch" 
+                    type="text" 
+                    placeholder="Search plot..."
+                    class="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 outline-none focus:border-blue-500"
+                >
+            </div>
+
+            <div id="plotList" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+
+        </aside>
+
+        <!-- MAIN VIEWER -->
+        <main class="flex-1 relative bg-black overflow-hidden">
+
+            <!-- WebGL canvas and SVG overlay injected here by script.js -->
+            <div id="viewer" class="absolute inset-0"></div>
+
+            <!-- Loading screen -->
+            <div id="loadingScreen" class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#020617]">
+                <div class="text-white font-semibold text-lg">Loading Panorama…</div>
+                <div class="w-10 h-10 border-4 border-slate-700 border-t-green-500 rounded-full animate-spin"></div>
+            </div>
+
+            <!-- Gradient top overlay -->
+            <div class="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10"></div>
+
+            <!-- Mode badge -->
+            <div class="absolute top-5 left-1/2 -translate-x-1/2 z-20">
+                <div id="modeBadge" class="px-4 py-2 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700 shadow-xl text-sm font-medium">
+                    View Mode
+                </div>
+            </div>
+
+            <!-- Draw HUD -->
+            <div id="drawHud" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-20">
+                <div class="w-[300px] rounded-3xl bg-slate-900/95 backdrop-blur-xl border border-green-500 shadow-2xl p-5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-green-400 font-semibold">Draw Polygon</div>
+                            <div class="text-xs text-slate-400 mt-1">Click on panorama to add points</div>
+                        </div>
+                        <div id="drawPointCount" class="h-10 w-10 rounded-full bg-green-500/20 border border-green-500 flex items-center justify-center font-bold">
+                            0
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mt-5">
+                        <button id="drawUndo" class="h-10 rounded-xl bg-slate-800 hover:bg-slate-700 transition">Undo</button>
+                        <button id="drawFinish" class="h-10 rounded-xl bg-green-600 hover:bg-green-700 transition">Finish</button>
+                        <button id="drawCancel" class="h-10 rounded-xl bg-red-600 hover:bg-red-700 transition">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- RIGHT PANEL -->
+        <aside class="w-[260px] bg-[#020617] border-l border-slate-800 flex flex-col shrink-0">
+
+            <div class="h-16 px-4 flex items-center border-b border-slate-800">
+                <div id="selectedPlotNumber" class="text-lg font-semibold truncate">No Plot Selected</div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800">
+                <input id="selectedPlotHidden" type="hidden">
+                <input 
+                    id="selectedPlotId" 
+                    readonly 
+                    placeholder="Plot ID"
+                    class="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 text-sm"
+                >
+                <div id="coordinateCount" class="mt-3 text-sm text-slate-400">0 Points</div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800">
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btnStartTracing" class="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 transition font-medium">Trace</button>
+                    <button id="btnRetrace" class="h-10 rounded-xl bg-amber-600 hover:bg-amber-700 transition font-medium">Retrace</button>
+                    <button id="btnSave" class="h-10 rounded-xl bg-green-600 hover:bg-green-700 transition font-medium">Save</button>
+                    <button id="btnDelete" class="h-10 rounded-xl bg-red-600 hover:bg-red-700 transition font-medium">Delete</button>
+                </div>
+            </div>
+
+            <div class="px-4 pt-4 pb-2">
+                <div class="text-sm font-medium text-slate-300">Coordinates</div>
+            </div>
+
+            <div id="coordinatesList" class="flex-1 overflow-y-auto mx-4 mb-4 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-xs font-mono space-y-1">
+                No coordinates
+            </div>
+
+        </aside>
+
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirmModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center">
+        <div class="w-[400px] rounded-3xl bg-slate-900 border border-slate-700 p-6 shadow-2xl">
+            <h3 class="text-lg font-semibold">Generate New Project</h3>
+            <p class="mt-3 text-sm text-slate-400">Existing plot mappings will be removed.</p>
+            <div class="flex justify-end gap-2 mt-6">
+                <button id="cancelGenerate" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Cancel</button>
+                <button id="confirmGenerate" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-[10000] space-y-2"></div>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
