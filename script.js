@@ -1081,3 +1081,4 @@ window.addEventListener("load", async () => {
   // Load data after viewer is ready (image may still be loading, that's fine)
   await loadAllData();
 });
+// ======================================================
