@@ -483,12 +483,15 @@ function initWebGL() {
   // Load panorama
   const img = new Image();
   img.crossOrigin = "anonymous";
+  img.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
     document.getElementById("loadingScreen").style.display = "none";
     render();
   };
   img.onerror = () => {
     document.getElementById("loadingScreen").innerHTML = `
-      <div style="color:#ef4444;font-size:14px;">Failed to load panorama.<br>Make sure <code>./assets/Panorama1_000.png</code> exists.</div>
+      <div style="color:#ef4444;font-size:14px;">Failed to load panorama.<br>Make sure <code>./assets/Panorama1_000.jpg</code> exists.</div>
     `;
   };
   img.src = PANORAMA_URL;
