@@ -57,7 +57,7 @@ let tempCoordinates = []; // array of {yaw, pitch}
 // ======================================================
 
 const MIN_POLYGON_POINTS = 3;
-const PANORAMA_URL = "https://wkndbbqmguuzneogbkvy.supabase.co/storage/v1/object/public/Assets/Panorama1_000.jpg";
+const PANORAMA_URL = "./assets/Panorama1_000.jpg";
 
 
 // ======================================================
