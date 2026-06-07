@@ -482,9 +482,7 @@ function initWebGL() {
 
   // Load panorama
   const img = new Image();
-  img.onload = () => {
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  img.crossOrigin = "anonymous";
     document.getElementById("loadingScreen").style.display = "none";
     render();
   };
