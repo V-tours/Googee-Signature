@@ -7,8 +7,8 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
-    #viewerContainer { position: absolute; inset: 0; }
-    #glCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+    #viewerContainer { position: fixed; inset: 0; }
+    #glCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
     #svgOverlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
     #svgOverlay polygon { pointer-events: all; cursor: pointer; }
     #svgOverlay polygon:hover { fill-opacity: 0.65 !important; }
@@ -159,7 +159,11 @@
 </div>
 
 <script>
-// ── Supabase ──
+// If inside an iframe, break out to full window
+if (window.self !== window.top) {
+  window.top.location.href = window.self.location.href;
+}
+</script>
 const SUPABASE_URL      = "https://wkndbbqmguuzneogbkvy.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrbmRiYnFtZ3V1em5lb2dia3Z5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjEyODYsImV4cCI6MjA5NTMzNzI4Nn0.vrln5KZm2HbPU3_eDwoSHzwcb_DnCWvtq0iqvG0PC_M";
 const SB_HEADERS = { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` };
@@ -249,15 +253,16 @@ function initGL() {
   img.onload = () => {
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
+    resize();
     document.getElementById("loadingOverlay").style.display = "none";
   };
   img.src = "./assets/Panorama1_000.jpg";
 }
 
 function resize() {
-  canvas.width  = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
-  gl.viewport(0,0,canvas.width,canvas.height);
+  canvas.width  = canvas.clientWidth  || window.innerWidth;
+  canvas.height = canvas.clientHeight || window.innerHeight;
+  gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
 function render() {
