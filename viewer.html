@@ -188,7 +188,9 @@ function toFeetInches(val) {
 const canvas = document.getElementById("glCanvas");
 const svgEl  = document.getElementById("svgOverlay");
 let gl, program, tex;
-let yaw = Math.PI, pitch = Math.PI/2 - 0.01, fov = 75;
+let yaw = Math.PI, pitch = 0, fov = 75;
+// On narrow/portrait screens (mobile) use wider FOV so panorama isn't zoomed in
+if (window.innerWidth < window.innerHeight) fov = 90;
 const MIN_PITCH = -Math.PI/2+0.001, MAX_PITCH = Math.PI/2-0.001;
 const MIN_FOV = 20, MAX_FOV = 100;
 
@@ -273,15 +275,24 @@ function initGL() {
     }
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);
+    resize(); // re-check dimensions after image load (mobile browser chrome may have shifted)
     document.getElementById("loadingOverlay").style.display = "none";
   };
   img.src = PANO_URL;
 }
 
 function resize() {
-  canvas.width  = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
-  gl.viewport(0,0,canvas.width,canvas.height);
+  // Use physical pixels (accounts for devicePixelRatio on retina/mobile screens).
+  // Without this, on a 2x display the canvas render resolution is half the screen
+  // and the GPU stretches it — causes the "zoomed in / blurry" look on mobile.
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.floor(canvas.clientWidth  * dpr);
+  const H = Math.floor(canvas.clientHeight * dpr);
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width  = W;
+    canvas.height = H;
+  }
+  gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
 function render() {
@@ -297,7 +308,10 @@ function render() {
 
 // ── Projection (exact match to shader) ──
 function screenToSphere(sx, sy) {
+  // sx/sy are CSS pixels; canvas.width/height are physical pixels — scale by dpr
+  const dpr = window.devicePixelRatio || 1;
   const W=canvas.width, H=canvas.height, aspect=W/H;
+  sx *= dpr; sy *= dpr;
   const scale=Math.tan(fov*Math.PI/180*0.5);
   const uvx=(sx/W)*2-1, uvy=1-(sy/H)*2;
   const rax=uvx*scale*aspect, ray=uvy*scale, raz=-1;
@@ -320,9 +334,11 @@ function sphereToScreen(ptYaw, ptPitch) {
   const rnx=rpx, rny=rpy*cp-rpz*sp, rnz=rpy*sp+rpz*cp;
   if (rnz>=0) return null;
   const uvx=(rnx/(-rnz))/scale/aspect, uvy=(rny/(-rnz))/scale;
-  const sx=(uvx+1)*0.5*W, sy=(1-(uvy+1)*0.5)*H;
-  if (sx<-W||sx>2*W||sy<-H||sy>2*H) return null;
-  return { x:sx, y:sy };
+  const dpr2 = window.devicePixelRatio || 1;
+  const pxX=(uvx+1)*0.5*W, pxY=(1-(uvy+1)*0.5)*H;
+  if (pxX<-W||pxX>2*W||pxY<-H||pxY>2*H) return null;
+  // Convert back to CSS pixels for SVG overlay (SVG uses CSS coordinate space)
+  return { x: pxX/dpr2, y: pxY/dpr2 };
 }
 
 // ── SVG Overlay ──

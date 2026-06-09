@@ -330,7 +330,7 @@ let canvas, svgOverlay;
 
 // Camera state
 let yaw = Math.PI;    // horizontal rotation in radians
-let pitch = Math.PI / 2 - 0.01; // look straight down at nadir
+let pitch = 0;         // look at horizon (0 = level)
 let fov = 75;         // field of view in degrees
 
 const MIN_FOV = 20;
@@ -548,8 +548,13 @@ function initWebGL() {
 
 function resizeCanvas() {
   const container = document.getElementById("viewer");
-  canvas.width = container.clientWidth;
-  canvas.height = container.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.floor(container.clientWidth  * dpr);
+  const H = Math.floor(container.clientHeight * dpr);
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width  = W;
+    canvas.height = H;
+  }
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
@@ -594,6 +599,9 @@ function render() {
 //   lat = asin(rd.y)
 //   stored: yaw=lon, pitch=lat
 function screenToSphere(sx, sy) {
+  // sx/sy are CSS pixels; canvas.width/height are physical pixels — scale by dpr
+  const dpr = window.devicePixelRatio || 1;
+  sx *= dpr; sy *= dpr;
   const W = canvas.width;
   const H = canvas.height;
   const aspect = W / H;
@@ -664,12 +672,14 @@ function sphereToScreen(ptYaw, ptPitch) {
   const uvy = (rny / (-rnz)) / scale;
 
   // Inverse step 1: NDC -> pixel
+  const dpr2 = window.devicePixelRatio || 1;
   const screenX = (uvx + 1) * 0.5 * W;
   const screenY = (1 - (uvy + 1) * 0.5) * H;
 
   if (screenX < -W || screenX > 2*W || screenY < -H || screenY > 2*H) return null;
 
-  return { x: screenX, y: screenY };
+  // Convert back to CSS pixels for SVG overlay
+  return { x: screenX / dpr2, y: screenY / dpr2 };
 }
 
 
