@@ -406,7 +406,7 @@ canvas.addEventListener("wheel", e => { e.preventDefault(); fov+=e.deltaY*0.05; 
 
 let lastTouchDist=0, lastTX=0, lastTY=0;
 canvas.addEventListener("touchstart", e => { e.preventDefault(); if(e.touches.length===1){isDragging=true;didDrag=false;lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;dragSX=lastTX;dragSY=lastTY;}else if(e.touches.length===2){isDragging=false;lastTouchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}}, {passive:false});
-canvas.addEventListener("touchmove", e => { e.preventDefault(); if(e.touches.length===1&&isDragging){const dx=e.touches[0].clientX-lastTX,dy=e.touches[0].clientY-lastTY;yaw-=dx*(fov/75)*0.002;pitch-=dy*(fov/75)*0.002;pitch=Math.max(MIN_PITCH,Math.min(MAX_PITCH,pitch));lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;if(Math.hypot(e.touches[0].clientX-dragSX,e.touches[0].clientY-dragSY)>6)didDrag=true;}else if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);fov-=(d-lastTouchDist)*0.1;fov=Math.max(MIN_FOV,Math.min(MAX_FOV,fov));lastTouchDist=d;}}, {passive:false});
+canvas.addEventListener("touchmove", e => { e.preventDefault(); if(e.touches.length===1&&isDragging){const dx=e.touches[0].clientX-lastTX,dy=e.touches[0].clientY-lastTY;const dprS=window.devicePixelRatio||1;yaw-=dx*(fov/75)*0.002/dprS;pitch-=dy*(fov/75)*0.002/dprS;pitch=Math.max(MIN_PITCH,Math.min(MAX_PITCH,pitch));lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;if(Math.hypot(e.touches[0].clientX-dragSX,e.touches[0].clientY-dragSY)>6)didDrag=true;}else if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);fov-=(d-lastTouchDist)*0.1;fov=Math.max(MIN_FOV,Math.min(MAX_FOV,fov));lastTouchDist=d;}}, {passive:false});
 canvas.addEventListener("touchend", e => { isDragging=false; });
 
 // ── Stats ──
@@ -421,10 +421,20 @@ function updateStats(rows) {
 
 // ── Popup ──
 const popupOverlay = document.getElementById("popupOverlay");
+let popupOpenedAt = 0;
+
 document.getElementById("closeBtn").addEventListener("click", ()=>popupOverlay.classList.remove("visible"));
-popupOverlay.addEventListener("click", e=>{ if(e.target===popupOverlay)popupOverlay.classList.remove("visible"); });
+
+// Guard: ignore backdrop-tap that arrives within 400ms of popup opening
+// (on mobile, touchend fires click on the element underneath AND on newly
+// visible elements in the same gesture — this closes the popup instantly)
+popupOverlay.addEventListener("click", e=>{
+  if (Date.now() - popupOpenedAt < 400) return;
+  if(e.target===popupOverlay) popupOverlay.classList.remove("visible");
+});
 
 function showPopup(plot) {
+  popupOpenedAt = Date.now();
   const status=(plot.status||"").toLowerCase();
   const label=status.charAt(0).toUpperCase()+status.slice(1);
   document.getElementById("cardPlotLabel").textContent=`PLOT ${plot.plot}`;
