@@ -432,6 +432,20 @@ function createShader(gl, type, src) {
   return s;
 }
 
+// Returns the safe max texture dimension for this device's GPU.
+// Queries WebGL, then caps at 4096 for safety on older iOS devices.
+function getMaxTextureSize() {
+  try {
+    const testCanvas = document.createElement("canvas");
+    const testGl = testCanvas.getContext("webgl") || testCanvas.getContext("experimental-webgl");
+    if (testGl) {
+      const max = testGl.getParameter(testGl.MAX_TEXTURE_SIZE);
+      return Math.min(max, 8192); // never exceed 8192
+    }
+  } catch (e) {}
+  return 4096; // safe fallback
+}
+
 function initWebGL() {
   const container = document.getElementById("viewer");
 
@@ -480,12 +494,31 @@ function initWebGL() {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
     new Uint8Array([10, 10, 20, 255]));
 
-  // Load panorama
+  // Load panorama — with mobile-safe texture upload
+  // iOS WebGL max texture is 4096 on older devices, 8192 on newer.
+  // We downscale on a 2D canvas if needed so it always fits.
   const img = new Image();
-  img.crossOrigin = "anonymous";
+  // Only set crossOrigin if the asset is on a different origin.
+  // For same-origin (GitHub Pages / local), omitting it avoids CORS failures on iOS.
+  if (new URL(PANORAMA_URL, location.href).origin !== location.origin) {
+    img.crossOrigin = "anonymous";
+  }
   img.onload = () => {
+    const MAX_TEX = getMaxTextureSize();
+    let source = img;
+    if (img.naturalWidth > MAX_TEX || img.naturalHeight > MAX_TEX) {
+      // Downscale to fit within MAX_TEX while preserving 2:1 aspect
+      const scale = Math.min(MAX_TEX / img.naturalWidth, MAX_TEX / img.naturalHeight);
+      const w = Math.floor(img.naturalWidth  * scale);
+      const h = Math.floor(img.naturalHeight * scale);
+      const offscreen = document.createElement("canvas");
+      offscreen.width  = w;
+      offscreen.height = h;
+      offscreen.getContext("2d").drawImage(img, 0, 0, w, h);
+      source = offscreen;
+    }
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
     document.getElementById("loadingScreen").style.display = "none";
     render();
   };
@@ -737,7 +770,7 @@ function onMouseMove(e) {
 
   const sensitivity = (fov / 75) * 0.003;
   yaw   -= dx * sensitivity;
-  pitch += dy * sensitivity;
+  pitch -= dy * sensitivity;  // inverted: drag down → look up (natural pano feel)
   pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
 
   lastMouseX = e.clientX;
@@ -807,7 +840,7 @@ function onTouchMove(e) {
     const dy = e.touches[0].clientY - lastTouchY;
     const sensitivity = (fov / 75) * 0.004;
     yaw   -= dx * sensitivity;
-    pitch += dy * sensitivity;
+    pitch -= dy * sensitivity;  // inverted: drag down → look up
     pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
     lastTouchX = e.touches[0].clientX;
     lastTouchY = e.touches[0].clientY;
