@@ -778,7 +778,7 @@ function onMouseMove(e) {
   const dx = e.clientX - lastMouseX;
   const dy = e.clientY - lastMouseY;
 
-  const sensitivity = (fov / 75) * 0.003;
+  const sensitivity = (fov / 75) * 0.0015;
   yaw   -= dx * sensitivity;
   pitch -= dy * sensitivity;  // inverted: drag down → look up (natural pano feel)
   pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
@@ -848,7 +848,7 @@ function onTouchMove(e) {
   if (e.touches.length === 1 && isDragging) {
     const dx = e.touches[0].clientX - lastTouchX;
     const dy = e.touches[0].clientY - lastTouchY;
-    const sensitivity = (fov / 75) * 0.004;
+    const sensitivity = (fov / 75) * 0.002;
     yaw   -= dx * sensitivity;
     pitch -= dy * sensitivity;  // inverted: drag down → look up
     pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
