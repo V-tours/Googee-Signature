@@ -3,60 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plot Mapping Admin</title>
+    <title>Plot Mapping Admin | Premium Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .font-title {
+            font-family: 'Outfit', sans-serif;
+        }
+        /* Custom premium scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 99px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        /* Mobile responsive layout */
+        @media (max-width: 900px) {
+            .h-screen.flex {
+                flex-direction: column;
+            }
+            .h-screen.flex > aside:first-child {
+                width: 100%;
+                height: auto;
+                max-height: 140px;
+                overflow-x: auto;
+                overflow-y: hidden;
+                border-right: none;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+            }
+            .h-screen.flex > aside:first-child #plotList {
+                display: flex;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                gap: 0.5rem;
+                padding: 0.5rem;
+            }
+            .h-screen.flex > aside:first-child #plotList > div {
+                min-width: 140px;
+                flex-shrink: 0;
+            }
+            .h-screen.flex > main {
+                flex: 1;
+                min-height: 250px;
+            }
+            .h-screen.flex > aside:last-child {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+                overflow-y: auto;
+                border-left: none;
+                border-top: 1px solid rgba(255,255,255,0.05);
+            }
+        }
+    </style>
 </head>
 
-<body class="bg-[#020617] text-white overflow-hidden">
+<body class="bg-[#030712] text-slate-100 overflow-hidden selection:bg-blue-500/30 selection:text-blue-200">
 
     <div class="h-screen flex">
 
         <!-- LEFT PANEL -->
-        <aside class="w-[260px] bg-[#020617] border-r border-slate-800 flex flex-col shrink-0">
+        <aside class="w-[280px] bg-slate-950/75 backdrop-blur-xl border-r border-white/5 flex flex-col shrink-0">
 
-            <div class="h-16 px-4 flex items-center justify-between border-b border-slate-800">
-                <div class="text-lg font-semibold">Plots</div>
-                <div id="plotCountLabel" class="text-xs px-2 py-1 rounded-lg bg-slate-900 text-slate-400">0</div>
+            <div class="h-16 px-5 flex items-center justify-between border-b border-white/5">
+                <div class="text-md font-bold font-title uppercase tracking-wider text-slate-200">Plots Database</div>
+                <div id="plotCountLabel" class="text-xs px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300 font-semibold">0</div>
             </div>
 
-            <div class="p-4 border-b border-slate-800">
+            <div class="p-5 border-b border-white/5 space-y-3">
+                <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Configure Layout</label>
                 <div class="flex gap-2">
                     <input 
                         id="plotCountInput" 
                         type="number" 
                         min="1" 
-                        placeholder="Plots"
-                        class="flex-1 h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 outline-none focus:border-blue-500"
+                        placeholder="Plot Count"
+                        aria-label="Number of plots to generate"
+                        class="flex-1 h-10 rounded-xl bg-slate-900 border border-white/10 px-3 outline-none text-sm focus:border-blue-500/80 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder-slate-600 font-medium"
                     >
                     <button 
                         id="generatePlotsBtn"
-                        class="h-10 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 transition font-medium"
+                        aria-label="Generate plots"
+                        class="h-10 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 transition-all font-semibold text-sm active:scale-95 shadow-md shadow-blue-900/20"
                     >
                         Go
                     </button>
                 </div>
             </div>
 
-            <div class="p-4 border-b border-slate-800">
-                <div class="flex items-center justify-between text-sm">
-                    <span class="text-slate-400">Progress</span>
-                    <span id="progressText" class="font-medium">0 / 0</span>
+            <div class="p-5 border-b border-white/5 space-y-2.5">
+                <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
+                    <span class="text-slate-500">Mapping Progress</span>
+                    <span id="progressText" class="text-slate-300 font-mono">0 / 0</span>
                 </div>
-                <div class="mt-3 h-2 bg-slate-800 rounded-full overflow-hidden">
-                    <div id="progressBar" class="h-full w-0 bg-green-500 transition-all"></div>
+                <div class="h-2 bg-slate-900 border border-white/5 rounded-full overflow-hidden">
+                    <div id="progressBar" class="h-full w-0 bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"></div>
                 </div>
             </div>
 
-            <div class="p-4 border-b border-slate-800">
-                <input 
-                    id="plotSearch" 
-                    type="text" 
-                    placeholder="Search plot..."
-                    class="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 outline-none focus:border-blue-500"
-                >
+            <div class="p-5 border-b border-white/5">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-slate-500 pointer-events-none">
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </span>
+                    <input 
+                        id="plotSearch" 
+                        type="text" 
+                        placeholder="Search plot..."
+                        aria-label="Search plots by name or ID"
+                        class="w-full h-10 pl-9 pr-3 rounded-xl bg-slate-900 border border-white/10 outline-none text-sm focus:border-blue-500/80 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder-slate-600"
+                    >
+                </div>
             </div>
 
-            <div id="plotList" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+            <div id="plotList" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
 
         </aside>
 
@@ -67,37 +140,38 @@
             <div id="viewer" class="absolute inset-0"></div>
 
             <!-- Loading screen -->
-            <div id="loadingScreen" class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#020617]">
-                <div class="text-white font-semibold text-lg">Loading Panorama…</div>
-                <div class="w-10 h-10 border-4 border-slate-700 border-t-green-500 rounded-full animate-spin"></div>
+            <div id="loadingScreen" class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950">
+                <div class="font-title font-extrabold text-2xl tracking-wider text-slate-100">Googee Premium Studio</div>
+                <div id="loadingText" class="text-slate-400 text-sm font-medium animate-pulse">Initializing Panorama Canvas…</div>
+                <div class="w-12 h-12 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin mt-2"></div>
             </div>
 
             <!-- Gradient top overlay -->
-            <div class="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none z-10"></div>
+            <div class="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-none z-10"></div>
 
             <!-- Mode badge -->
-            <div class="absolute top-5 left-1/2 -translate-x-1/2 z-20">
-                <div id="modeBadge" class="px-4 py-2 rounded-full bg-slate-900/90 backdrop-blur-xl border border-slate-700 shadow-xl text-sm font-medium">
+            <div class="absolute top-6 left-1/2 -translate-x-1/2 z-20">
+                <div id="modeBadge" class="px-5 py-2.5 rounded-full bg-slate-950/80 backdrop-blur-xl border border-white/10 shadow-2xl text-xs uppercase tracking-wider font-semibold text-slate-300 transition-all">
                     View Mode
                 </div>
             </div>
 
             <!-- Draw HUD -->
-            <div id="drawHud" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-20">
-                <div class="w-[300px] rounded-3xl bg-slate-900/95 backdrop-blur-xl border border-green-500 shadow-2xl p-5">
+            <div id="drawHud" class="hidden absolute top-24 left-1/2 -translate-x-1/2 z-20">
+                <div class="w-[320px] rounded-3xl bg-slate-950/90 backdrop-blur-2xl border border-emerald-500/40 shadow-[0_24px_50px_rgba(0,0,0,0.5),0_0_15px_rgba(16,185,129,0.15)] p-5">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-green-400 font-semibold">Draw Polygon</div>
-                            <div class="text-xs text-slate-400 mt-1">Click on panorama to add points</div>
+                            <div class="text-emerald-400 font-title font-bold text-md tracking-wide">Draw Plot Boundary</div>
+                            <div class="text-[11px] text-slate-400 mt-1 font-medium">Click on panorama to set points</div>
                         </div>
-                        <div id="drawPointCount" class="h-10 w-10 rounded-full bg-green-500/20 border border-green-500 flex items-center justify-center font-bold">
+                        <div id="drawPointCount" class="h-10 w-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 font-mono text-sm shadow-inner">
                             0
                         </div>
                     </div>
-                    <div class="grid grid-cols-3 gap-2 mt-5">
-                        <button id="drawUndo" class="h-10 rounded-xl bg-slate-800 hover:bg-slate-700 transition">Undo</button>
-                        <button id="drawFinish" class="h-10 rounded-xl bg-green-600 hover:bg-green-700 transition">Finish</button>
-                        <button id="drawCancel" class="h-10 rounded-xl bg-red-600 hover:bg-red-700 transition">Cancel</button>
+                    <div class="grid grid-cols-3 gap-2.5 mt-5">
+                        <button id="drawUndo" aria-label="Undo last point" class="h-9 rounded-xl bg-slate-900 border border-white/5 hover:bg-slate-800 hover:text-white transition text-xs font-semibold text-slate-300">Undo</button>
+                        <button id="drawFinish" aria-label="Finish drawing polygon" class="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 transition text-xs font-bold text-white shadow-lg shadow-emerald-900/30">Finish</button>
+                        <button id="drawCancel" aria-label="Cancel drawing" class="h-9 rounded-xl bg-rose-600/90 hover:bg-rose-500 transition text-xs font-bold text-white">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -105,58 +179,77 @@
         </main>
 
         <!-- RIGHT PANEL -->
-        <aside class="w-[260px] bg-[#020617] border-l border-slate-800 flex flex-col shrink-0">
+        <aside class="w-[280px] bg-slate-950/75 backdrop-blur-xl border-l border-white/5 flex flex-col shrink-0">
 
-            <div class="h-16 px-4 flex items-center border-b border-slate-800">
-                <div id="selectedPlotNumber" class="text-lg font-semibold truncate">No Plot Selected</div>
+            <div class="h-16 px-5 flex items-center border-b border-white/5">
+                <div id="selectedPlotNumber" class="text-md font-bold font-title uppercase tracking-wider text-slate-200 truncate">No Plot Selected</div>
             </div>
 
-            <div class="p-4 border-b border-slate-800">
+            <div class="p-5 border-b border-white/5 space-y-3">
+                <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Mapping State</label>
                 <input id="selectedPlotHidden" type="hidden">
-                <input 
-                    id="selectedPlotId" 
-                    readonly 
-                    placeholder="Plot ID"
-                    class="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 text-sm"
-                >
-                <div id="coordinateCount" class="mt-3 text-sm text-slate-400">0 Points</div>
-            </div>
-
-            <div class="p-4 border-b border-slate-800">
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="btnStartTracing" class="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 transition font-medium">Trace</button>
-                    <button id="btnRetrace" class="h-10 rounded-xl bg-amber-600 hover:bg-amber-700 transition font-medium">Retrace</button>
-                    <button id="btnSave" class="h-10 rounded-xl bg-green-600 hover:bg-green-700 transition font-medium">Save</button>
-                    <button id="btnDelete" class="h-10 rounded-xl bg-red-600 hover:bg-red-700 transition font-medium">Delete</button>
+                <div class="relative">
+                    <input 
+                        id="selectedPlotId" 
+                        readonly 
+                        placeholder="Plot ID"
+                        class="w-full h-10 rounded-xl bg-slate-900 border border-white/10 px-3 text-sm text-slate-300 font-semibold font-mono placeholder-slate-700"
+                    >
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-400 font-medium">
+                    <span>Vertices Registered</span>
+                    <span id="coordinateCount" class="font-bold text-slate-200 bg-white/5 border border-white/10 rounded-md px-1.5 py-0.5 font-mono">0 Points</span>
                 </div>
             </div>
 
-            <div class="px-4 pt-4 pb-2">
-                <div class="text-sm font-medium text-slate-300">Coordinates</div>
+            <div class="p-5 border-b border-white/5 space-y-3">
+                <div class="grid grid-cols-2 gap-2.5">
+                    <button id="btnStartTracing" aria-label="Start tracing plot boundary" class="h-10 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-xs text-white transition-all active:scale-95 shadow-lg shadow-blue-900/20">Trace</button>
+                    <button id="btnRetrace" aria-label="Retrace existing polygon" class="h-10 rounded-xl bg-amber-600/95 hover:bg-amber-500 font-semibold text-xs text-white transition-all active:scale-95 shadow-lg shadow-amber-900/20">Retrace</button>
+                    <button id="btnSave" aria-label="Save polygon to database" class="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white transition-all active:scale-95 shadow-lg shadow-emerald-900/20 col-span-2">Save Polygon</button>
+                    <button id="btnDelete" aria-label="Delete polygon from database" class="h-9 rounded-xl bg-rose-600/10 border border-rose-500/20 text-rose-400 hover:bg-rose-600 hover:text-white transition text-xs font-semibold col-span-2">Delete Polygon</button>
+                </div>
             </div>
 
-            <div id="coordinatesList" class="flex-1 overflow-y-auto mx-4 mb-4 rounded-2xl border border-slate-800 bg-slate-900 p-3 text-xs font-mono space-y-1">
-                No coordinates
+            <div class="px-5 pt-4 pb-2.5 flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Spherical Coordinates</span>
+                <span class="text-[10px] text-slate-600 font-mono">Yaw, Pitch</span>
+            </div>
+
+            <div id="coordinatesList" class="flex-1 overflow-y-auto mx-5 mb-5 rounded-2xl border border-white/5 bg-slate-900/50 p-3.5 text-[11px] font-mono text-slate-400 space-y-1.5">
+                <div class="text-slate-600 italic text-center py-4">No coordinates mapped</div>
             </div>
 
         </aside>
 
     </div>
 
-    <!-- Confirm Modal -->
-    <div id="confirmModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center">
-        <div class="w-[400px] rounded-3xl bg-slate-900 border border-slate-700 p-6 shadow-2xl">
-            <h3 class="text-lg font-semibold">Generate New Project</h3>
-            <p class="mt-3 text-sm text-slate-400">Existing plot mappings will be removed.</p>
-            <div class="flex justify-end gap-2 mt-6">
-                <button id="cancelGenerate" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700">Cancel</button>
-                <button id="confirmGenerate" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700">Generate</button>
+    <!-- Confirm Modal (Generate) -->
+    <div id="confirmModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+        <div class="w-full max-w-[400px] rounded-3xl bg-slate-950 border border-white/10 p-6 shadow-2xl space-y-4">
+            <h3 class="text-lg font-bold font-title text-slate-200">Reinitialize Project?</h3>
+            <p class="text-sm text-slate-400 leading-relaxed">This operation will generate a fresh layout sequence. Existing mapping data not saved to the database will be reset.</p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button id="cancelGenerate" aria-label="Cancel plot generation" class="px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:bg-slate-800 text-xs font-semibold transition">Cancel</button>
+                <button id="confirmGenerate" aria-label="Confirm plot generation" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white transition shadow-lg shadow-rose-900/20">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reusable Confirm Modal (Delete, etc.) -->
+    <div id="genericConfirmModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+        <div class="w-full max-w-[400px] rounded-3xl bg-slate-950 border border-white/10 p-6 shadow-2xl space-y-4">
+            <h3 id="genericModalTitle" class="text-lg font-bold font-title text-slate-200"></h3>
+            <p id="genericModalMessage" class="text-sm text-slate-400 leading-relaxed"></p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button id="genericModalCancel" class="px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:bg-slate-800 text-xs font-semibold transition">Cancel</button>
+                <button id="genericModalConfirm" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white transition shadow-lg shadow-rose-900/20">Confirm</button>
             </div>
         </div>
     </div>
 
     <!-- Toast container -->
-    <div id="toastContainer" class="fixed top-4 right-4 z-[10000] space-y-2"></div>
+    <div id="toastContainer" class="fixed top-6 right-6 z-[10000] space-y-2"></div>
 
     <script src="script.js"></script>
 

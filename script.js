@@ -2,6 +2,14 @@
 // SUPABASE CONFIG
 // ======================================================
 
+// ⚠️ SECURITY NOTE: This anon key is public. For production: (Issue #21)
+// 1. Enable Row Level Security (RLS) on 'plots' and 'polygons' tables
+// 2. Create policies: viewer = SELECT only, admin = authenticated full access
+// 3. Use Supabase Auth for admin sessions
+
+// NOTE: Projection math (screenToSphere, sphereToScreen) and WebGL rendering (Issue #23)
+// are duplicated in viewer.html. Changes to projection logic must be synced.
+
 const SUPABASE_URL = "https://wkndbbqmguuzneogbkvy.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrbmRiYnFtZ3V1em5lb2dia3Z5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjEyODYsImV4cCI6MjA5NTMzNzI4Nn0.vrln5KZm2HbPU3_eDwoSHzwcb_DnCWvtq0iqvG0PC_M";
 
@@ -53,11 +61,19 @@ let tempCoordinates = []; // array of {yaw, pitch}
 
 
 // ======================================================
-// CONFIG
+// CONFIG & NAMED CONSTANTS (Issue #25)
 // ======================================================
 
 const MIN_POLYGON_POINTS = 3;
 const PANORAMA_URL = "./assets/Panorama1_000.jpg";
+
+const MOUSE_SENSITIVITY = 0.0015;
+const TOUCH_SENSITIVITY = 0.002;
+const DRAG_THRESHOLD = 4;
+const TOUCH_DRAG_THRESHOLD = 6;
+const WHEEL_ZOOM_SPEED = 0.05;
+const PINCH_ZOOM_SPEED = 0.1;
+const REFERENCE_FOV = 75;
 
 
 // ======================================================
@@ -111,16 +127,74 @@ function getMappedCount() {
 
 function showToast(message, type = "info") {
   const colors = {
-    success: "bg-green-600",
-    error:   "bg-red-600",
-    warning: "bg-amber-600",
-    info:    "bg-blue-600"
+    success: "border-emerald-500 bg-emerald-950/80 text-emerald-200",
+    error:   "border-rose-500 bg-rose-950/80 text-rose-200",
+    warning: "border-amber-500 bg-amber-950/80 text-amber-200",
+    info:    "border-blue-500 bg-blue-950/80 text-blue-200"
   };
+  
   const toast = document.createElement("div");
-  toast.className = `${colors[type]} px-4 py-3 rounded-xl shadow-lg text-sm`;
-  toast.textContent = message;
+  toast.className = `flex items-center gap-3 border ${colors[type] || colors.info} px-4 py-3 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] text-xs font-semibold backdrop-blur-xl animate-fade-in transition-all duration-350 transform translate-y-2 opacity-0`;
+  toast.style.cssText = "transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); border-left-width: 4px;";
+  
+  // Icon placeholder or status indicators
+  const indicators = {
+    success: "🟢",
+    error:   "🔴",
+    warning: "🟡",
+    info:    "🔵"
+  };
+  
+  toast.innerHTML = `
+    <span>${indicators[type] || "ℹ️"}</span>
+    <span class="flex-1">${message}</span>
+  `;
+  
   toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  
+  // Force reflow and animate in
+  setTimeout(() => {
+    toast.style.opacity = "1";
+    toast.style.transform = "translateY(0)";
+  }, 10);
+  
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(-10px)";
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+
+// ======================================================
+// REUSABLE CONFIRM MODAL (Issue #20)
+// ======================================================
+
+function showConfirmModal(title, message, onConfirm) {
+  const modal = document.getElementById("genericConfirmModal");
+  const titleEl = document.getElementById("genericModalTitle");
+  const messageEl = document.getElementById("genericModalMessage");
+  const cancelBtn = document.getElementById("genericModalCancel");
+  const confirmBtn = document.getElementById("genericModalConfirm");
+
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  modal.classList.remove("hidden");
+
+  const close = () => {
+    modal.classList.add("hidden");
+    confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+  };
+
+  document.getElementById("genericModalConfirm").addEventListener("click", () => {
+    onConfirm();
+    close();
+  });
+
+  document.getElementById("genericModalCancel").addEventListener("click", () => {
+    close();
+  });
 }
 
 
@@ -146,7 +220,7 @@ function updateSelectedPlotPanel() {
     selectedPlotNumber.textContent = "Select a plot to begin mapping";
     selectedPlotId.value = "";
     coordinateCount.textContent = "0 Points";
-    coordinatesList.innerHTML = "No coordinates";
+    coordinatesList.innerHTML = `<div class="text-slate-650 italic text-center py-6">No plot selected</div>`;
     return;
   }
   selectedPlotNumber.textContent = `Plot ${selectedPlot.plotNumber}`;
@@ -163,14 +237,17 @@ function updateSelectedPlotPanel() {
 function renderCoordinateList() {
   if (!selectedPlot) return;
   if (selectedPlot.coordinates.length === 0) {
-    coordinatesList.innerHTML = "No coordinates";
+    coordinatesList.innerHTML = `<div class="text-slate-650 italic text-center py-6">No coordinates mapped</div>`;
     return;
   }
   coordinatesList.innerHTML = "";
   selectedPlot.coordinates.forEach((pt, index) => {
     const row = document.createElement("div");
-    row.className = "mb-1";
-    row.textContent = `(${index + 1}) ${pt.yaw.toFixed(4)}, ${pt.pitch.toFixed(4)}`;
+    row.className = "flex justify-between items-center py-1 border-b border-white/5 last:border-0";
+    row.innerHTML = `
+      <span class="text-slate-500 font-semibold font-mono">#${index + 1}</span>
+      <span class="text-slate-300 font-mono tracking-tight">${pt.yaw.toFixed(4)}, ${pt.pitch.toFixed(4)}</span>
+    `;
     coordinatesList.appendChild(row);
   });
 }
@@ -185,7 +262,8 @@ function selectPlot(plot) {
   selectedPlotHidden.value = plot.plotId;
   updateSelectedPlotPanel();
   renderPlotList();
-  renderAllPolygons();
+  needsRender = true;
+  svgDirty = true;
 }
 
 
@@ -198,20 +276,32 @@ function createPlotCard(plot) {
   const isMapped = plot.coordinates.length > 0;
   const status = (plotStatuses[plot.plotNumber] || "").toLowerCase();
 
-  const statusDot = { available: "🟢", booked: "🟡", sold: "🔴" }[status] || "⚪";
+  const colorConfig = {
+    available: { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-400", dot: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" },
+    booked:    { bg: "bg-amber-500/10", border: "border-amber-500/20", text: "text-amber-400", dot: "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" },
+    sold:      { bg: "bg-rose-500/10", border: "border-rose-500/20", text: "text-rose-400", dot: "bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" },
+    default:   { bg: "bg-slate-900/50", border: "border-slate-800", text: "text-slate-500", dot: "bg-slate-700" }
+  };
+
+  const currentStyle = colorConfig[status] || colorConfig.default;
 
   const card = document.createElement("div");
-  card.className = `p-3 rounded-xl border cursor-pointer transition ${
-    isSelected ? "border-blue-500 bg-blue-500/10" : "border-slate-800 bg-slate-900"
+  card.className = `p-3.5 rounded-2xl border cursor-pointer transition-all duration-300 ${
+    isSelected 
+      ? "border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)] scale-[0.98]" 
+      : "border-white/5 bg-slate-900/40 hover:bg-slate-900/80 hover:border-white/10"
   }`;
 
   card.innerHTML = `
     <div class="flex items-center justify-between">
-      <div>
-        <div class="font-medium">Plot ${plot.plotNumber}</div>
-        <div class="text-xs text-slate-400">${status || "unknown"}</div>
+      <div class="space-y-1">
+        <div class="font-title font-bold text-sm tracking-wide ${isSelected ? 'text-blue-400' : 'text-slate-200'}">Plot ${plot.plotNumber}</div>
+        <div class="text-[10px] font-bold uppercase tracking-wider ${currentStyle.text}">${status || "unknown"}</div>
       </div>
-      <div class="text-lg">${isSelected ? "🟡" : isMapped ? statusDot : "⚪"}</div>
+      <div class="flex items-center gap-2">
+        ${isMapped ? `<span class="text-[10px] font-bold text-slate-500 font-mono">Mapped</span>` : ''}
+        <div class="h-2.5 w-2.5 rounded-full ${isSelected ? 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] animate-pulse' : currentStyle.dot}"></div>
+      </div>
     </div>
   `;
 
@@ -240,7 +330,7 @@ function renderPlotList() {
 // GENERATE PLOTS
 // ======================================================
 
-function generatePlots(count) {
+function generatePlots(count, silent = false) {
   plots.length = 0;
   selectedPlot = null;
   localStorage.setItem("plotCount", count);
@@ -250,13 +340,16 @@ function generatePlots(count) {
   renderPlotList();
   updateProgress();
   updateSelectedPlotPanel();
-  renderAllPolygons();
-  showToast(`${count} plots created`, "success");
+  needsRender = true;
+  svgDirty = true;
+  if (!silent) {
+    showToast(`${count} plots created`, "success");
+  }
 }
 
 
 // ======================================================
-// LOAD FROM SUPABASE
+// LOAD FROM SUPABASE (Issue #2 & #8)
 // ======================================================
 
 async function loadAllData() {
@@ -267,6 +360,19 @@ async function loadAllData() {
     plotRows.forEach(row => { plotStatuses[row.plot] = row.status; });
 
     const polyRows = await sbFetch("polygons?select=plot_number,coordinates");
+
+    // Auto-detect max plot counts to prevent empty local storage data reset
+    const maxPlotNum = Math.max(
+      ...plotRows.map(r => r.plot),
+      ...polyRows.map(r => r.plot_number),
+      0
+    );
+
+    if (plots.length === 0 && maxPlotNum > 0) {
+      plotCountInput.value = maxPlotNum;
+      generatePlots(maxPlotNum, true);
+    }
+
     polyRows.forEach(row => {
       const plot = plots.find(p => p.plotNumber === row.plot_number);
       if (plot) plot.coordinates = row.coordinates;
@@ -274,7 +380,8 @@ async function loadAllData() {
 
     renderPlotList();
     updateProgress();
-    renderAllPolygons();
+    needsRender = true;
+    svgDirty = true;
     showToast("Data loaded", "success");
   } catch (e) {
     console.error(e);
@@ -331,7 +438,7 @@ let canvas, svgOverlay;
 // Camera state
 let yaw = Math.PI;    // horizontal rotation in radians
 let pitch = 0;         // look at horizon (0 = level)
-let fov = 75;         // field of view in degrees
+let fov = REFERENCE_FOV;         // field of view in degrees
 
 const MIN_FOV = 20;
 const MAX_FOV = 100;
@@ -351,6 +458,17 @@ let lastTouchDist = 0;
 let lastTouchX = 0;
 let lastTouchY = 0;
 
+// Render Dirty Flags (Issue #5 & #6)
+let needsRender = true;
+let svgDirty = true;
+
+const uniforms = {
+  yaw: null,
+  pitch: null,
+  fov: null,
+  res: null,
+  tex: null
+};
 
 // ======================================================
 // WEBGL SETUP
@@ -432,18 +550,16 @@ function createShader(gl, type, src) {
   return s;
 }
 
-// Returns the safe max texture dimension for this device's GPU.
-// Queries WebGL, then caps at 4096 for safety on older iOS devices.
 function getMaxTextureSize() {
   try {
     const testCanvas = document.createElement("canvas");
     const testGl = testCanvas.getContext("webgl") || testCanvas.getContext("experimental-webgl");
     if (testGl) {
       const max = testGl.getParameter(testGl.MAX_TEXTURE_SIZE);
-      return Math.min(max, 8192); // never exceed 8192
+      return Math.min(max, 8192);
     }
   } catch (e) {}
-  return 4096; // safe fallback
+  return 4096;
 }
 
 function initWebGL() {
@@ -470,6 +586,13 @@ function initWebGL() {
   gl.linkProgram(program);
   gl.useProgram(program);
 
+  // Cache WebGL uniform locations once (Issue #7)
+  uniforms.yaw = gl.getUniformLocation(program, "u_yaw");
+  uniforms.pitch = gl.getUniformLocation(program, "u_pitch");
+  uniforms.fov = gl.getUniformLocation(program, "u_fov");
+  uniforms.res = gl.getUniformLocation(program, "u_res");
+  uniforms.tex = gl.getUniformLocation(program, "u_tex");
+
   // Full-screen quad
   const buf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -494,56 +617,91 @@ function initWebGL() {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
     new Uint8Array([10, 10, 20, 255]));
 
-  // Load panorama — with mobile-safe texture upload
-  // iOS WebGL max texture is 4096 on older devices, 8192 on newer.
-  // We downscale on a 2D canvas if needed so it always fits.
-  const img = new Image();
-  // Only set crossOrigin if the asset is on a different origin.
-  // For same-origin (GitHub Pages / local), omitting it avoids CORS failures on iOS.
-  if (new URL(PANORAMA_URL, location.href).origin !== location.origin) {
-    img.crossOrigin = "anonymous";
-  }
-  img.onload = () => {
-    const MAX_TEX = getMaxTextureSize();
-    let source = img;
-    if (img.naturalWidth > MAX_TEX || img.naturalHeight > MAX_TEX) {
-      // Downscale to fit within MAX_TEX while preserving 2:1 aspect
-      const scale = Math.min(MAX_TEX / img.naturalWidth, MAX_TEX / img.naturalHeight);
-      const w = Math.floor(img.naturalWidth  * scale);
-      const h = Math.floor(img.naturalHeight * scale);
-      const offscreen = document.createElement("canvas");
-      offscreen.width  = w;
-      offscreen.height = h;
-      offscreen.getContext("2d").drawImage(img, 0, 0, w, h);
-      source = offscreen;
-    }
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-    document.getElementById("loadingScreen").style.display = "none";
-    render();
-  };
-  img.onerror = () => {
-    document.getElementById("loadingScreen").innerHTML = `
-      <div style="color:#ef4444;font-size:14px;">Failed to load panorama.<br>Make sure <code>./assets/Panorama1_000.jpg</code> exists.</div>
-    `;
-  };
-  img.src = PANORAMA_URL;
+  // XHR progressive download indicator (Issue #13)
+  loadPanoProgressive(PANORAMA_URL);
 
   // Resize
   resizeCanvas();
-  window.addEventListener("resize", () => { resizeCanvas(); render(); });
+  window.addEventListener("resize", () => {
+    resizeCanvas();
+    needsRender = true;
+    svgDirty = true;
+  });
 
   // Mouse events
-  canvas.addEventListener("mousedown", onMouseDown);
-  window.addEventListener("mousemove", onMouseMove);
-  window.addEventListener("mouseup", onMouseUp);
+  document.addEventListener("mousedown", onMouseDown);
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
   canvas.addEventListener("wheel", onWheel, { passive: false });
-  canvas.addEventListener("click", onCanvasClick);
+  document.addEventListener("click", onCanvasClick);
 
   // Touch events
-  canvas.addEventListener("touchstart", onTouchStart, { passive: false });
-  canvas.addEventListener("touchmove", onTouchMove, { passive: false });
-  canvas.addEventListener("touchend", onTouchEnd);
+  document.addEventListener("touchstart", onTouchStart, { passive: false });
+  document.addEventListener("touchmove", onTouchMove, { passive: false });
+  document.addEventListener("touchend", onTouchEnd);
+
+  // Context Loss & Restore handling (Issue #14)
+  canvas.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    document.getElementById("loadingScreen").style.display = "flex";
+    document.getElementById("loadingText").textContent = "Graphics context lost. Restoring...";
+  }, false);
+
+  canvas.addEventListener("webglcontextrestored", () => {
+    initWebGL();
+    needsRender = true;
+    svgDirty = true;
+  }, false);
+}
+
+function loadPanoProgressive(url) {
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", url, true);
+  xhr.responseType = "blob";
+  
+  const loadingText = document.getElementById("loadingText");
+  
+  xhr.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      loadingText.textContent = `Downloading Panorama Canvas (${pct}%)…`;
+    }
+  };
+  
+  xhr.onload = () => {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      const blob = xhr.response;
+      const img = new Image();
+      img.onload = () => {
+        const MAX_TEX = getMaxTextureSize();
+        let source = img;
+        if (img.naturalWidth > MAX_TEX || img.naturalHeight > MAX_TEX) {
+          const scale = Math.min(MAX_TEX / img.naturalWidth, MAX_TEX / img.naturalHeight);
+          const w = Math.floor(img.naturalWidth  * scale);
+          const h = Math.floor(img.naturalHeight * scale);
+          const offscreen = document.createElement("canvas");
+          offscreen.width  = w;
+          offscreen.height = h;
+          offscreen.getContext("2d").drawImage(img, 0, 0, w, h);
+          source = offscreen;
+        }
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        document.getElementById("loadingScreen").style.display = "none";
+        needsRender = true;
+        svgDirty = true;
+      };
+      img.src = URL.createObjectURL(blob);
+    } else {
+      loadingText.textContent = `Failed to load panorama texture: ${xhr.statusText}`;
+    }
+  };
+  
+  xhr.onerror = () => {
+    loadingText.textContent = "Network error occurred while fetching panorama.";
+  };
+  
+  xhr.send();
 }
 
 function resizeCanvas() {
@@ -568,21 +726,18 @@ function render() {
 
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  const uYaw   = gl.getUniformLocation(program, "u_yaw");
-  const uPitch = gl.getUniformLocation(program, "u_pitch");
-  const uFov   = gl.getUniformLocation(program, "u_fov");
-  const uRes   = gl.getUniformLocation(program, "u_res");
-  const uTex   = gl.getUniformLocation(program, "u_tex");
-
-  gl.uniform1f(uYaw,   yaw);
-  gl.uniform1f(uPitch, pitch);
-  gl.uniform1f(uFov,   fov);
-  gl.uniform2f(uRes,   canvas.width, canvas.height);
-  gl.uniform1i(uTex,   0);
+  gl.uniform1f(uniforms.yaw,   yaw);
+  gl.uniform1f(uniforms.pitch, pitch);
+  gl.uniform1f(uniforms.fov,   fov);
+  gl.uniform2f(uniforms.res,   canvas.width, canvas.height);
+  gl.uniform1i(uniforms.tex,   0);
 
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-  renderSVGOverlay();
+  if (svgDirty) {
+    renderSVGOverlay();
+    svgDirty = false;
+  }
 }
 
 
@@ -590,16 +745,7 @@ function render() {
 // SPHERICAL <-> SCREEN PROJECTION
 // ======================================================
 
-// screenToSphere: screen pixel -> spherical coords stored as {yaw, pitch}
-// Follows shader pipeline exactly:
-//   ray = normalize(uvx*scale*aspect, uvy*scale, -1)
-//   rp  = rotX(-pitch) * ray
-//   rd  = rotY(yaw) * rp
-//   lon = atan2(rd.x, rd.z)
-//   lat = asin(rd.y)
-//   stored: yaw=lon, pitch=lat
 function screenToSphere(sx, sy) {
-  // sx/sy are CSS pixels; canvas.width/height are physical pixels — scale by dpr
   const dpr = window.devicePixelRatio || 1;
   sx *= dpr; sy *= dpr;
   const W = canvas.width;
@@ -608,38 +754,31 @@ function screenToSphere(sx, sy) {
   const fovRad = fov * Math.PI / 180;
   const scale = Math.tan(fovRad * 0.5);
 
-  // Step 1: pixel -> NDC [-1,1]
   const uvx = (sx / W) * 2 - 1;
   const uvy = 1 - (sy / H) * 2;
 
-  // Step 2: NDC -> ray (unnormalized, shader normalizes but direction is same)
   const rax = uvx * scale * aspect;
   const ray = uvy * scale;
   const raz = -1.0;
   const rlen = Math.sqrt(rax*rax + ray*ray + raz*raz);
   const rnx = rax/rlen, rny = ray/rlen, rnz = raz/rlen;
 
-  // Step 3: rotX(-pitch) * ray
   const cp = Math.cos(-pitch), sp = Math.sin(-pitch);
   const rpx = rnx;
   const rpy = rny*cp - rnz*sp;
   const rpz = rny*sp + rnz*cp;
 
-  // Step 4: rotY(yaw) * rp
   const cy = Math.cos(yaw), syy = Math.sin(yaw);
   const rdx =  rpx*cy + rpz*syy;
   const rdy =  rpy;
   const rdz = -rpx*syy + rpz*cy;
 
-  // Step 5: spherical coords
   const lon = Math.atan2(rdx, rdz);
   const lat = Math.asin(Math.max(-1, Math.min(1, rdy)));
 
   return { yaw: lon, pitch: lat };
 }
 
-// sphereToScreen: exact inverse of screenToSphere
-// Given stored {yaw=lon, pitch=lat}, reverse steps 5->1
 function sphereToScreen(ptYaw, ptPitch) {
   const W = canvas.width;
   const H = canvas.height;
@@ -647,38 +786,31 @@ function sphereToScreen(ptYaw, ptPitch) {
   const fovRad = fov * Math.PI / 180;
   const scale = Math.tan(fovRad * 0.5);
 
-  // Inverse step 5: lon/lat -> rd
   const rdx = Math.sin(ptYaw) * Math.cos(ptPitch);
   const rdy = Math.sin(ptPitch);
   const rdz = Math.cos(ptYaw) * Math.cos(ptPitch);
 
-  // Inverse step 4: rotY(-yaw) * rd = rp
   const cy = Math.cos(yaw), syy = Math.sin(yaw);
   const rpx =  rdx*cy - rdz*syy;
   const rpy =  rdy;
   const rpz =  rdx*syy + rdz*cy;
 
-  // Inverse step 3: rotX(pitch) * rp = ray  [p_sign=+1, r_sign=+1]
   const cp = Math.cos(pitch), sp = Math.sin(pitch);
   const rnx =  rpx;
   const rny =  rpy*cp - rpz*sp;
   const rnz =  rpy*sp + rpz*cp;
 
-  // Behind camera (rnz should be negative for visible points)
   if (rnz >= 0) return null;
 
-  // Inverse step 2: ray -> NDC
   const uvx = (rnx / (-rnz)) / scale / aspect;
   const uvy = (rny / (-rnz)) / scale;
 
-  // Inverse step 1: NDC -> pixel
   const dpr2 = window.devicePixelRatio || 1;
   const screenX = (uvx + 1) * 0.5 * W;
   const screenY = (1 - (uvy + 1) * 0.5) * H;
 
   if (screenX < -W || screenX > 2*W || screenY < -H || screenY > 2*H) return null;
 
-  // Convert back to CSS pixels for SVG overlay
   return { x: screenX / dpr2, y: screenY / dpr2 };
 }
 
@@ -688,10 +820,8 @@ function sphereToScreen(ptYaw, ptPitch) {
 // ======================================================
 
 function renderSVGOverlay() {
-  // Clear SVG
   while (svgOverlay.firstChild) svgOverlay.removeChild(svgOverlay.firstChild);
 
-  // Draw saved polygons
   plots.forEach(plot => {
     if (plot.coordinates.length < 3) return;
     const isSelected = selectedPlot && selectedPlot.plotId === plot.plotId;
@@ -700,10 +830,8 @@ function renderSVGOverlay() {
     drawPolygonOnSVG(plot.coordinates, color.fill, color.stroke, isSelected ? 0.6 : 0.35, isSelected ? "#facc15" : color.stroke, isSelected ? 3 : 1.5, `plot-${plot.plotId}`);
   });
 
-  // Draw temp polygon while drawing
   if (drawMode && tempCoordinates.length > 0) {
     drawPolygonOnSVG(tempCoordinates, "#ef4444", "#ef4444", 0.2, "#ef4444", 1.5, "temp-poly");
-    // Draw dots for each temp point
     tempCoordinates.forEach((pt, i) => {
       const screen = sphereToScreen(pt.yaw, pt.pitch);
       if (!screen) return;
@@ -716,7 +844,6 @@ function renderSVGOverlay() {
       circle.setAttribute("stroke-width", "2");
       svgOverlay.appendChild(circle);
 
-      // Point number label
       const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.setAttribute("x", screen.x + 9);
       text.setAttribute("y", screen.y + 4);
@@ -727,19 +854,26 @@ function renderSVGOverlay() {
       svgOverlay.appendChild(text);
     });
   }
+
+  if (drawMode && hoverSnapPt) {
+    const snapCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    snapCircle.setAttribute("cx", hoverSnapPt.x.toFixed(1));
+    snapCircle.setAttribute("cy", hoverSnapPt.y.toFixed(1));
+    snapCircle.setAttribute("r", "6");
+    snapCircle.setAttribute("fill", "#fbbf24");
+    snapCircle.setAttribute("stroke", "#000");
+    snapCircle.setAttribute("stroke-width", "2");
+    svgOverlay.appendChild(snapCircle);
+  }
 }
 
 function drawPolygonOnSVG(coords, fill, stroke, fillOpacity, strokeColor, strokeWidth, id) {
   if (coords.length < 2) return;
 
   const screenPts = coords.map(pt => sphereToScreen(pt.yaw, pt.pitch));
-
-  // Check if any points are visible
   const visible = screenPts.filter(p => p !== null);
   if (visible.length < 2) return;
 
-  // Build points string — skip null (behind camera) points
-  // Use a polyline approach: if a segment crosses behind camera, we skip it
   const pointsStr = screenPts
     .map(p => p ? `${p.x.toFixed(1)},${p.y.toFixed(1)}` : null)
     .filter(Boolean)
@@ -763,34 +897,86 @@ function drawPolygonOnSVG(coords, fill, stroke, fillOpacity, strokeColor, stroke
 // ======================================================
 
 function onMouseDown(e) {
-  isDragging = true;
   didDrag = false;
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
   dragStartX = e.clientX;
   dragStartY = e.clientY;
+
+  if (e.target.closest(".w-\\[280px\\]") || e.target.closest("#drawHud") || e.target.closest("#confirmModal") || e.target.closest("#genericConfirmModal")) return;
+
+  isDragging = true;
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
   canvas.style.cursor = "grabbing";
 }
 
+let hoverSnapPt = null;
+
+function findSnappedCoordinate(sx, sy) {
+  const SNAP_DISTANCE = 15; // pixels
+  let closestPt = null;
+  let minDist = Infinity;
+
+  plots.forEach(plot => {
+    if (!plot.coordinates) return;
+    plot.coordinates.forEach(c => {
+      const screenPt = sphereToScreen(c.yaw, c.pitch);
+      if (!screenPt) return;
+      const dist = Math.hypot(screenPt.x - sx, screenPt.y - sy);
+      if (dist < SNAP_DISTANCE && dist < minDist) {
+        minDist = dist;
+        closestPt = { yaw: c.yaw, pitch: c.pitch, isSnapped: true };
+      }
+    });
+  });
+
+  tempCoordinates.forEach(c => {
+    const screenPt = sphereToScreen(c.yaw, c.pitch);
+    if (!screenPt) return;
+    const dist = Math.hypot(screenPt.x - sx, screenPt.y - sy);
+    if (dist < SNAP_DISTANCE && dist < minDist) {
+      minDist = dist;
+      closestPt = { yaw: c.yaw, pitch: c.pitch, isSnapped: true };
+    }
+  });
+
+  if (closestPt) return closestPt;
+  const pt = screenToSphere(sx, sy);
+  if (pt) pt.isSnapped = false;
+  return pt;
+}
+
 function onMouseMove(e) {
-  if (!isDragging) return;
+  if (isDragging) {
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
 
-  const dx = e.clientX - lastMouseX;
-  const dy = e.clientY - lastMouseY;
+    const sensitivity = (fov / REFERENCE_FOV) * MOUSE_SENSITIVITY;
+    yaw   -= dx * sensitivity;
+    pitch -= dy * sensitivity;
+    pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
 
-  const sensitivity = (fov / 75) * 0.0015;
-  yaw   -= dx * sensitivity;
-  pitch -= dy * sensitivity;  // inverted: drag down → look up (natural pano feel)
-  pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
 
-  lastMouseX = e.clientX;
-  lastMouseY = e.clientY;
+    const totalDx = e.clientX - dragStartX;
+    const totalDy = e.clientY - dragStartY;
+    if (Math.sqrt(totalDx*totalDx + totalDy*totalDy) > DRAG_THRESHOLD) didDrag = true;
 
-  const totalDx = e.clientX - dragStartX;
-  const totalDy = e.clientY - dragStartY;
-  if (Math.sqrt(totalDx*totalDx + totalDy*totalDy) > 4) didDrag = true;
-
-  render();
+    needsRender = true;
+    svgDirty = true;
+  } else if (drawMode) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const snapped = findSnappedCoordinate(sx, sy);
+    if (snapped && snapped.isSnapped) {
+      hoverSnapPt = sphereToScreen(snapped.yaw, snapped.pitch);
+    } else {
+      hoverSnapPt = null;
+    }
+    needsRender = true;
+    svgDirty = true;
+  }
 }
 
 function onMouseUp(e) {
@@ -800,24 +986,32 @@ function onMouseUp(e) {
 
 function onWheel(e) {
   e.preventDefault();
-  fov += e.deltaY * 0.05;
+  fov += e.deltaY * WHEEL_ZOOM_SPEED;
   fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
-  render();
+  needsRender = true;
+  svgDirty = true;
 }
 
 function onCanvasClick(e) {
   if (didDrag) return;
   if (!drawMode) return;
 
+  // Ignore clicks on UI elements (buttons, sidebars)
+  if (e.target.closest(".w-\\[280px\\]") || e.target.closest("#drawHud") || e.target.closest("#confirmModal") || e.target.closest("#genericConfirmModal")) return;
+
   const rect = canvas.getBoundingClientRect();
   const sx = e.clientX - rect.left;
   const sy = e.clientY - rect.top;
 
-  const pt = screenToSphere(sx, sy);
-  tempCoordinates.push(pt);
+  const pt = findSnappedCoordinate(sx, sy);
+  if (pt) {
+    delete pt.isSnapped;
+    tempCoordinates.push(pt);
+  }
   updateDrawCount();
   renderTemporaryCoordinateList();
-  render();
+  needsRender = true;
+  svgDirty = true;
 }
 
 
@@ -826,14 +1020,16 @@ function onCanvasClick(e) {
 // ======================================================
 
 function onTouchStart(e) {
-  e.preventDefault();
   if (e.touches.length === 1) {
-    isDragging = true;
     didDrag = false;
     lastTouchX = e.touches[0].clientX;
     lastTouchY = e.touches[0].clientY;
     dragStartX = lastTouchX;
     dragStartY = lastTouchY;
+
+    if (e.target.closest(".w-\\[280px\\]") || e.target.closest("#drawHud") || e.target.closest("#confirmModal") || e.target.closest("#genericConfirmModal")) return;
+
+    isDragging = true;
   } else if (e.touches.length === 2) {
     isDragging = false;
     lastTouchDist = Math.hypot(
@@ -848,40 +1044,45 @@ function onTouchMove(e) {
   if (e.touches.length === 1 && isDragging) {
     const dx = e.touches[0].clientX - lastTouchX;
     const dy = e.touches[0].clientY - lastTouchY;
-    const sensitivity = (fov / 75) * 0.002;
+    const sensitivity = (fov / REFERENCE_FOV) * TOUCH_SENSITIVITY;
     yaw   -= dx * sensitivity;
-    pitch -= dy * sensitivity;  // inverted: drag down → look up
+    pitch -= dy * sensitivity;
     pitch  = Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch));
     lastTouchX = e.touches[0].clientX;
     lastTouchY = e.touches[0].clientY;
     const totalDx = e.touches[0].clientX - dragStartX;
     const totalDy = e.touches[0].clientY - dragStartY;
-    if (Math.sqrt(totalDx*totalDx + totalDy*totalDy) > 6) didDrag = true;
-    render();
+    if (Math.sqrt(totalDx*totalDx + totalDy*totalDy) > TOUCH_DRAG_THRESHOLD) didDrag = true;
+    needsRender = true;
+    svgDirty = true;
   } else if (e.touches.length === 2) {
     const dist = Math.hypot(
       e.touches[0].clientX - e.touches[1].clientX,
       e.touches[0].clientY - e.touches[1].clientY
     );
-    fov -= (dist - lastTouchDist) * 0.1;
+    fov -= (dist - lastTouchDist) * PINCH_ZOOM_SPEED;
     fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
     lastTouchDist = dist;
-    render();
+    needsRender = true;
+    svgDirty = true;
   }
 }
 
 function onTouchEnd(e) {
   if (e.touches.length === 0) {
-    // Tap to place point
     if (!didDrag && drawMode && e.changedTouches.length === 1) {
       const rect = canvas.getBoundingClientRect();
       const sx = e.changedTouches[0].clientX - rect.left;
       const sy = e.changedTouches[0].clientY - rect.top;
-      const pt = screenToSphere(sx, sy);
-      tempCoordinates.push(pt);
+      const pt = findSnappedCoordinate(sx, sy);
+      if (pt) {
+        delete pt.isSnapped;
+        tempCoordinates.push(pt);
+      }
       updateDrawCount();
       renderTemporaryCoordinateList();
-      render();
+      needsRender = true;
+      svgDirty = true;
     }
     isDragging = false;
   }
@@ -889,12 +1090,15 @@ function onTouchEnd(e) {
 
 
 // ======================================================
-// RENDER LOOP (continuous while dragging)
+// RENDER LOOP (Continuous check, conditionally rendering - Issue #6)
 // ======================================================
 
 function startRenderLoop() {
   function loop() {
-    render();
+    if (needsRender) {
+      render();
+      needsRender = false;
+    }
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
@@ -951,7 +1155,8 @@ function startRetraceMode() {
   tempCoordinates = [...selectedPlot.coordinates];
   setModeBadge(`Retracing Plot ${selectedPlot.plotNumber}`);
   openDrawHud();
-  render();
+  needsRender = true;
+  svgDirty = true;
   showToast("Retrace Mode Started", "warning");
 }
 
@@ -961,7 +1166,8 @@ function cancelDrawMode() {
   tempCoordinates = [];
   closeDrawHud();
   setModeBadge("View Mode");
-  render();
+  needsRender = true;
+  svgDirty = true;
   showToast("Tracing Cancelled", "error");
 }
 
@@ -970,9 +1176,11 @@ function undoLastPoint() {
   tempCoordinates.pop();
   updateDrawCount();
   renderTemporaryCoordinateList();
-  render();
+  needsRender = true;
+  svgDirty = true;
 }
 
+// Issue #6 needsRender triggers
 function finishDrawing() {
   if (tempCoordinates.length < MIN_POLYGON_POINTS) {
     showToast(`Minimum ${MIN_POLYGON_POINTS} points required`, "error");
@@ -982,7 +1190,8 @@ function finishDrawing() {
   closeDrawHud();
   renderTemporaryCoordinateList();
   setModeBadge("Ready To Save");
-  render();
+  needsRender = true;
+  svgDirty = true;
   showToast("Polygon ready — click Save", "success");
 }
 
@@ -1004,15 +1213,17 @@ function renderTemporaryCoordinateList() {
 
 
 // ======================================================
-// RENDER ALL POLYGONS (triggers SVG re-render)
+// RENDER ALL POLYGONS
 // ======================================================
 
 function renderAllPolygons() {
-  render();
+  needsRender = true;
+  svgDirty = true;
 }
 
 function renderPlotPolygon(plot) {
-  render();
+  needsRender = true;
+  svgDirty = true;
 }
 
 
@@ -1034,29 +1245,35 @@ btnSave.addEventListener("click", async () => {
   updateProgress();
   updateSelectedPlotPanel();
   setModeBadge("View Mode");
-  render();
+  needsRender = true;
+  svgDirty = true;
 
   await savePolygonToSupabase(selectedPlot);
 });
 
 
 // ======================================================
-// DELETE
+// DELETE (Issue #20: uses reusable confirm modal instead of native confirm)
 // ======================================================
 
-btnDelete.addEventListener("click", async () => {
+btnDelete.addEventListener("click", () => {
   if (!selectedPlot) { showToast("Select a plot", "warning"); return; }
-  const confirmed = confirm(`Delete polygon for Plot ${selectedPlot.plotNumber}?`);
-  if (!confirmed) return;
+  
+  showConfirmModal(
+    "Delete Polygon?",
+    `Are you sure you want to delete the mapping polygon for Plot ${selectedPlot.plotNumber}?`,
+    async () => {
+      selectedPlot.coordinates = [];
+      await deletePolygonFromSupabase(selectedPlot.plotNumber);
 
-  selectedPlot.coordinates = [];
-  await deletePolygonFromSupabase(selectedPlot.plotNumber);
-
-  updateProgress();
-  updateSelectedPlotPanel();
-  renderPlotList();
-  render();
-  showToast("Plot polygon deleted", "error");
+      updateProgress();
+      updateSelectedPlotPanel();
+      renderPlotList();
+      needsRender = true;
+      svgDirty = true;
+      showToast("Plot polygon deleted", "error");
+    }
+  );
 });
 
 
@@ -1105,23 +1322,24 @@ drawCancel.addEventListener("click", cancelDrawMode);
 // APP START
 // ======================================================
 
-window.addEventListener("load", async () => {
+window.addEventListener("DOMContentLoaded", async () => {
   initWebGL();
   startRenderLoop();
 
-  canvas.style.cursor = "grab";
+  if (canvas) {
+    canvas.style.cursor = "grab";
+  }
 
   const savedCount = localStorage.getItem("plotCount");
   if (savedCount) {
     plotCountInput.value = savedCount;
-    generatePlots(Number(savedCount));
+    generatePlots(Number(savedCount), true);
   }
 
   updateProgress();
   updateSelectedPlotPanel();
   setModeBadge("View Mode");
 
-  // Load data after viewer is ready (image may still be loading, that's fine)
   await loadAllData();
 });
 // ======================================================
