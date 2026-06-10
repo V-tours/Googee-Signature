@@ -500,7 +500,7 @@
 // NAMED CONSTANTS & SETUP (Issue #25)
 // ======================================================
 const MOUSE_SENS = 0.0010;
-const TOUCH_SENS = 0.0007;
+const TOUCH_SENS = 0.0022;
 const DRAG_THRESHOLD_MOUSE = 4;
 const DRAG_THRESHOLD_TOUCH = 8;
 const WHEEL_ZOOM_SPEED = 0.05;
@@ -545,7 +545,7 @@ function toFeetInches(val) {
 const canvas = document.getElementById("glCanvas");
 const svgEl  = document.getElementById("svgOverlay");
 let gl, program, tex;
-let yaw = Math.PI, pitch = 0, fov = REFERENCE_FOV;
+let yaw = Math.PI, pitch = -1.0, fov = REFERENCE_FOV;
 let targetYaw = yaw, targetPitch = pitch;
 
 if (window.innerWidth < window.innerHeight) fov = 90;
@@ -1131,7 +1131,7 @@ async function init() {
 
     // Render loop with momentum/damping
     function loop() {
-      const smoothing = 0.12;
+      const smoothing = 0.06;
       const dy = targetYaw - yaw;
       const dp = targetPitch - pitch;
       
