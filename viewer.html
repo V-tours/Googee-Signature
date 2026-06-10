@@ -343,19 +343,39 @@
         left: 50%;
         transform: translateX(-50%) scale(0.95);
         width: calc(100% - 16px);
-        justify-content: space-between;
+        flex-direction: column;
+        justify-content: center;
         border-radius: 20px;
-        padding: 10px 16px;
+        padding: 12px;
+        gap: 8px;
+      }
+      .filter-group {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
       }
       #projectTitle {
         display: none;
       }
-      #statsBar {
-        top: 16px;
-        transform: translateX(-50%) scale(0.85);
-      }
       #topBar {
-        padding: 14px 16px;
+        top: 16px;
+        left: 16px;
+      }
+      .layout-btn {
+        top: 16px;
+        right: 16px;
+        bottom: auto;
+        left: auto;
+        padding: 10px 16px;
+        margin: 0;
+      }
+      #statsBar {
+        top: 68px;
+        left: 50%;
+        transform: translateX(-50%) scale(0.85);
+        width: 100%;
+        justify-content: center;
+        padding: 10px 16px;
       }
     }
   </style>
