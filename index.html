@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plot Mapping Admin | Premium Studio</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -250,6 +251,43 @@
 
     <!-- Toast container -->
     <div id="toastContainer" class="fixed top-6 right-6 z-[10000] space-y-2"></div>
+
+    <!-- Admin Login Modal -->
+    <div id="loginOverlay" class="fixed inset-0 bg-[#030712] z-[99999] flex items-center justify-center p-4">
+        <div class="w-full max-w-[400px] rounded-3xl bg-slate-950 border border-white/10 p-8 shadow-2xl flex flex-col items-center">
+            <img src="./assets/logo.png" alt="Logo" class="h-16 mb-6 object-contain">
+            <h2 class="text-xl font-bold font-title text-slate-200 mb-6">Admin Access Required</h2>
+            <input type="text" id="adminId" placeholder="Admin ID" class="w-full h-12 rounded-xl bg-slate-900 border border-white/10 px-4 text-sm text-slate-300 font-medium placeholder-slate-600 focus:border-blue-500/80 focus:ring-1 focus:ring-blue-500/50 outline-none mb-4 transition-all" autocomplete="off">
+            <input type="password" id="adminPass" placeholder="Password" class="w-full h-12 rounded-xl bg-slate-900 border border-white/10 px-4 text-sm text-slate-300 font-medium placeholder-slate-600 focus:border-blue-500/80 focus:ring-1 focus:ring-blue-500/50 outline-none mb-6 transition-all">
+            <button id="loginBtn" class="w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 transition-all font-semibold text-sm text-white shadow-lg shadow-blue-900/20 active:scale-95">Login</button>
+            <div id="loginError" class="text-rose-500 text-xs font-semibold mt-4 hidden">Invalid Admin ID or Password</div>
+        </div>
+    </div>
+
+    <script>
+        const loginOverlay = document.getElementById('loginOverlay');
+        const loginBtn = document.getElementById('loginBtn');
+        const adminId = document.getElementById('adminId');
+        const adminPass = document.getElementById('adminPass');
+        const loginError = document.getElementById('loginError');
+
+        if (sessionStorage.getItem('adminLoggedIn') === 'true') {
+            loginOverlay.style.display = 'none';
+        }
+
+        loginBtn.addEventListener('click', () => {
+            if (adminId.value === 'admin' && adminPass.value === 'Googee@123') {
+                sessionStorage.setItem('adminLoggedIn', 'true');
+                loginOverlay.style.display = 'none';
+            } else {
+                loginError.classList.remove('hidden');
+            }
+        });
+
+        adminPass.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loginBtn.click();
+        });
+    </script>
 
     <script src="script.js"></script>
 
